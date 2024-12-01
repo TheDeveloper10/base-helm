@@ -53,7 +53,7 @@ spec:
           {{- end }}
 
           ports:
-            - name: tcpPort
+            - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
           livenessProbe:
