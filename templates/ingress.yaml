@@ -37,7 +37,9 @@ spec:
               service:
                 name: {{ include "base-helm.fullname" $ }}
                 port:
-                  number: {{ $.Values.service.port }}
+                {{- with (index $.Values.service.ports 0) }}
+                  number: {{ .servicePort }}
+                {{- end }}
           {{- end }}
     {{- end }}
 {{- end }}
