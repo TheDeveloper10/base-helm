@@ -4,6 +4,11 @@
 
 # ==== Custom Values
 
+# This is for setting up the container startup command
+command: []
+args: []
+
+# This is for setting up the environment variables
 env: {}
 # MY_ENV_VAR: <value>
 envFrom: []
