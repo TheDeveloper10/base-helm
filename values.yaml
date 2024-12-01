@@ -2,6 +2,25 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+# ==== Custom Values
+
+env: {}
+# MY_ENV_VAR: <value>
+envFrom: []
+# - secretRef:
+#     name: my-secret
+#     items: # optional
+#       - key: username
+#         path: my-group/my-username
+# - configMapRef:
+#     name: my-configmap
+#     items: # optional
+#       - key: password
+
+
+
+# ==== Default Helm Chart
+
 # This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
 replicaCount: 1
 
@@ -109,12 +128,23 @@ volumes: []
 #   secret:
 #     secretName: mysecret
 #     optional: false
+# - name: bar
+#   configMap:
+#     name: myconfigmap
+#     optional: false
+# - name: baz
+#   emptyDir: {}
+# - name: qux
+#   hostPath:
+# - name: quux
+#   persistentVolumeClaim:
+#     claimName: myclaim
 
 # Additional volumeMounts on the output Deployment definition.
 volumeMounts: []
 # - name: foo
 #   mountPath: "/etc/foo"
-#   readOnly: true
+#   readOnly: false
 
 nodeSelector: {}
 
