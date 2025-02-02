@@ -61,9 +61,7 @@ spec:
 
           {{- if .Values.envFrom }}
           envFrom:
-          {{- range .Values.envFrom }}
-            - {{ toYaml . | nindent 10 }}
-          {{- end }}
+          {{ toYaml . | nindent 10 }}
           {{- end }}
 
           ports:
