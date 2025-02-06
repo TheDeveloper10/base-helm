@@ -5,6 +5,15 @@ metadata:
   labels:
     {{- include "base-helm.labels" . | nindent 4 }}
 spec:
+  {{- if .Values.deploymentStrategy }}
+  strategy:
+    type: {{ .Values.deploymentStrategy.type }}
+    {{- if .Values.deploymentStrategy.type | quote | eq "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ .Values.deploymentStrategy.maxSurge }}
+      maxUnavailable: {{ .Values.deploymentStrategy.maxUnavailable }}
+    {{- end }}
+  {{- end }}
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}

@@ -22,6 +22,11 @@ envFrom: []
 #     items: # optional
 #       - key: password
 
+deploymentStrategy:
+  type: RollingUpdate # Recreate
+  rollingUpdate:
+    maxSurge: 25%
+    maxUnavailable: 25%
 
 # This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
 service:
