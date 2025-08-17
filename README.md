@@ -3,5 +3,6 @@ The goal is to create a versatile, all-in-one Helm chart that can be used univer
 It is based on the default helm chart.
 
 ### TODOs
+- Add network policy
 - Add deployment of custom resources
 - Add role/clusterrole, rolebinding and clusterrolebinding.
