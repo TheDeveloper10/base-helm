@@ -140,10 +140,12 @@ resources: {}
   #   memory: 128Mi
 
 # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+enableLivenessProbe: true # to not have to remove the livenessProbe.enabled field
 livenessProbe:
   httpGet:
     path: /
     port: http
+enableReadinessProbe: true # to not have to remove the readinessProbe.enabled field
 readinessProbe:
   httpGet:
     path: /

@@ -79,10 +79,14 @@ spec:
             containerPort: {{ .containerPort }}
             protocol: {{ .protocol }}
           {{- end }}
+          {{- if .Values.enableLivenessProbe }}
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
+          {{- end }}
+          {{- if .Values.enableReadinessProbe }}
           readinessProbe:
             {{- toYaml .Values.readinessProbe | nindent 12 }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           {{- with .Values.volumeMounts }}
