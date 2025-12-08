@@ -9,6 +9,75 @@ fullnameOverride: ""
 # cilium:
 #   enabled: false
 
+networkPolicies:
+- name: "from-backend-to-mysql"
+  # EXAMPLE 1:
+  # this network policy allows restricts all traffic to mysql pods
+  # except traffic from pods in namespaces with label team=backend on port 3306
+  podSelector:
+    matchLabels:
+      app: mysql
+
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          team: backend
+    ports:
+    - protocol: TCP
+      port: 3306
+- name: "restrict-svcB-receiving"
+  # EXAMPLE 2:
+  # this network policy allows traffic from svcA to svcB on port 8080
+  podSelector:
+    matchLabels:
+      app: svcB
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: svcA
+    ports:
+    - protocol: TCP
+      port: 8080
+- name: "restrict-svcA-sending"
+  # EXAMPLE 3:
+  # this network policy allows svcA to send traffic only to svcB on port 8080
+  podSelector:
+    matchLabels:
+      app: svcA
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: svcB
+    ports:
+    - protocol: TCP
+      port: 8080
+- name: "deny-all-egress-except-dns"
+  # EXAMPLE 4:
+  # this network policy denies all egress traffic except DNS traffic
+  podSelector:
+    matchLabels:
+      app: some-app
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+- name: "deny-all-for-app"
+  # EXAMPLE 5:
+  # this network policy denies all ingress and egress traffic for pods with label app=restricted-app
+  podSelector:
+    matchLabels:
+      app: restricted-app
+  ingress: []
+  egress: []
+
 standardNetworkPolicies:
   denyAll: true
   blockCloudMetadata: true

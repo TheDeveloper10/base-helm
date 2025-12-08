@@ -1,0 +1,38 @@
+{{- range .Values.networkPolicies }}
+{{ $np := . }}
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $np.name }}-{{ include "base-np-security.fullname" $ }}
+  labels:
+    {{- include "base-np-security.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    {{- toYaml $np.podSelector | nindent 4 }}
+  {{- $policyTypes := list }}
+  {{- if hasKey $np "ingress" }}
+  {{- $policyTypes = append $policyTypes "Ingress" }}
+  {{- end }}
+  {{- if hasKey $np "egress" }}
+  {{- $policyTypes = append $policyTypes "Egress" }}
+  {{- end }}
+
+  policyTypes:
+    {{- toYaml $policyTypes | nindent 4 }}
+
+  {{- if $np.ingress }}
+  ingress:
+  {{- $np.ingress | toYaml | nindent 6 }}
+  {{- else }}
+  ingress: []
+  {{- end }}
+
+  {{- if $np.egress }}
+  egress:
+  {{- $np.egress | toYaml | nindent 6 }}
+  {{- else }}
+  egress: []
+  {{- end }}
+{{- end }}
