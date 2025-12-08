@@ -11,6 +11,7 @@ metadata:
 spec:
   podSelector:
     {{- toYaml $np.podSelector | nindent 4 }}
+
   {{- $policyTypes := list }}
   {{- if hasKey $np "ingress" }}
   {{- $policyTypes = append $policyTypes "Ingress" }}
@@ -22,17 +23,13 @@ spec:
   policyTypes:
     {{- toYaml $policyTypes | nindent 4 }}
 
-  {{- if $np.ingress }}
+  {{- if hasKey $np "ingress" }}
   ingress:
   {{- $np.ingress | toYaml | nindent 6 }}
-  {{- else }}
-  ingress: []
   {{- end }}
 
-  {{- if $np.egress }}
+  {{- if hasKey $np "egress" }}
   egress:
   {{- $np.egress | toYaml | nindent 6 }}
-  {{- else }}
-  egress: []
   {{- end }}
 {{- end }}
