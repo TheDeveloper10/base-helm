@@ -64,10 +64,8 @@ jobs:
           CHART_NAME: ${{ matrix.chart_name }}
           VERSION: ${{ steps.package.outputs.VERSION }}
         run: |
-          set -e
-
           OWNER=${{ github.repository_owner }}
-          OCI_NAMESPACE="ghcr.io/${OWNER}/helm"
+          OCI_NAMESPACE="ghcr.io/${OWNER}/base-helm"
 
           helm push "packaged/${CHART_NAME}-${VERSION}.tgz" "oci://${OCI_NAMESPACE}"
 
