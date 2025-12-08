@@ -1,0 +1,31 @@
+{{- if .Values.standardNetworkPolicies.denyAll }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-{{ include "base-np-security.fullname" . }}
+  labels:
+    {{- include "base-np-security.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+{{- end }}
+---
+
+{{- if .Values.standardNetworkPolicies.blockCloudMetadata }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: block-cloud-metadata-{{ include "base-np-security.fullname" . }}
+  labels:
+    {{- include "base-np-security.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 169.254.169.254/32
+{{- end }}

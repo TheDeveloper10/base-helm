@@ -3,6 +3,9 @@ name: Publish Helm charts to GHCR (OCI)
 on:
   push:
     branches: [ main, feat/cicd ]
+    paths:
+      - 'base-app/**'
+      - 'base-np-security/**'
   workflow_dispatch: {}
 
 jobs:
