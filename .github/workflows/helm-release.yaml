@@ -1,0 +1,84 @@
+name: Publish Helm charts to GHCR (OCI)
+
+on:
+  push:
+    branches: [ main, feat/cicd ]
+    paths:
+      - 'base-app/**'
+      - 'base-np-security/**'
+  workflow_dispatch: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        chart_name: [base-app, base-np-security]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.0 # or omit to use latest 3.x
+
+      - name: Install ORAS CLI
+        run: |
+          ORAS_VERSION="1.3.0"
+          curl -sSL \
+            "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz" \
+            -o oras.tar.gz
+          sudo tar -xzf oras.tar.gz -C /usr/local/bin oras
+          oras version
+
+      - name: Login to GHCR for Helm & ORAS
+        env:
+          GH_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          echo "$GH_TOKEN" | helm registry login ghcr.io \
+            -u "${{ github.actor }}" --password-stdin
+          echo "$GH_TOKEN" | oras login ghcr.io \
+            -u "${{ github.actor }}" --password-stdin
+
+      - name: Package chart
+        id: package
+        env:
+          CHART_NAME: ${{ matrix.chart_name }}
+        run: |
+          CHART_DIR="./${CHART_NAME}"
+
+          # Extract chart version from Chart.yaml using Helm itself
+          VERSION=$(helm show chart "$CHART_DIR" | awk '/^version:/ {print $2}')
+          echo "Detected version: $VERSION for $CHART_NAME"
+
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
+          mkdir -p packaged
+          helm package "$CHART_DIR" --destination packaged
+
+      - name: Push chart and tag with commit SHA + latest
+        env:
+          CHART_NAME: ${{ matrix.chart_name }}
+          VERSION: ${{ steps.package.outputs.VERSION }}
+        run: |
+          set -e
+
+          OWNER=${{ github.repository_owner }}
+          OCI_NAMESPACE="ghcr.io/${OWNER}/helm"
+
+          # 1) Push chart with its semantic version tag
+          helm push "packaged/${CHART_NAME}-${VERSION}.tgz" "oci://${OCI_NAMESPACE}"
+
+          # 2) Add extra tags using ORAS (short SHA + latest)
+          SHORT_SHA="${GITHUB_SHA::7}"
+          CHART_REF="${OCI_NAMESPACE}/${CHART_NAME}:${VERSION}"
+
+          echo "Tagging ${CHART_REF} as ${SHORT_SHA} and latest"
+          oras tag "${CHART_REF}" "${SHORT_SHA}" latest
