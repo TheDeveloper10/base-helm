@@ -165,8 +165,8 @@ autoscaling:
 
 pdb:
   enabled: false
-  minAvailable: 1
-  maxUnavailable: 1
+  # minAvailable: 1
+  # maxUnavailable: 1
 
 # Additional volumes on the output Deployment definition.
 volumes: []

@@ -10,6 +10,13 @@ The purpose of this chart is to provide a flexible, universal Helm chart that ca
 
 This chart aims to deliver an easy-to-use, configurable solution for securing namespaces with network policies. Instead of relying on each individual application chart to manage its own network policies, this chart centralizes that responsibility within the namespace. It ensures consistent network protection across workloads and supports both standard and Cilium Network Policies, making it suitable for a wide range of Kubernetes setups.
 
+# Public
+
+```bash
+helm pull oci://registry-1.docker.io/thedeveloper10/base-app
+helm pull oci://registry-1.docker.io/thedeveloper10/base-np-security
+```
+
 ### TODOs
 
 - Add network policy

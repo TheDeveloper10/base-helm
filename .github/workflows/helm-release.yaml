@@ -1,4 +1,4 @@
-name: Publish Helm charts to GHCR (OCI)
+name: Publish Helm charts (OCI)
 
 on:
   push:
@@ -29,23 +29,10 @@ jobs:
         with:
           version: v3.16.0
 
-      - name: Install ORAS CLI
+      - name: Login to Helm Registry
         run: |
-          ORAS_VERSION="1.3.0"
-          curl -sSL \
-            "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz" \
-            -o oras.tar.gz
-          sudo tar -xzf oras.tar.gz -C /usr/local/bin oras
-          oras version
-
-      - name: Login to GHCR for Helm & ORAS
-        env:
-          GH_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
-        run: |
-          echo "$GH_TOKEN" | helm registry login ghcr.io \
-            -u "${{ github.actor }}" --password-stdin
-          echo "$GH_TOKEN" | oras login ghcr.io \
-            -u "${{ github.actor }}" --password-stdin
+          echo "${{ secrets.REGISTRY_TOKEN }}" | helm registry login ${{ secrets.REGISTRY_URL }} \
+            -u "${{ secrets.REGISTRY_USERNAME }}" --password-stdin
 
       - name: Package chart
         id: package
@@ -62,18 +49,11 @@ jobs:
           mkdir -p packaged
           helm package "$CHART_DIR" --destination packaged
 
-      - name: Push chart and tag with commit SHA + latest
+      - name: Push chart
         env:
           CHART_NAME: ${{ matrix.chart_name }}
           VERSION: ${{ steps.package.outputs.VERSION }}
         run: |
-          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          OCI_NAMESPACE="ghcr.io/${OWNER}/base-helm"
+          OCI_NAMESPACE="${{ secrets.REGISTRY_URL }}/${{ secrets.REGISTRY_USERNAME }}"
 
           helm push "packaged/${CHART_NAME}-${VERSION}.tgz" "oci://${OCI_NAMESPACE}"
-
-          SHORT_SHA="${GITHUB_SHA::7}"
-          CHART_REF="${OCI_NAMESPACE}/${CHART_NAME}:${VERSION}"
-
-          echo "Tagging ${CHART_REF} as ${SHORT_SHA} and latest"
-          oras tag "${CHART_REF}" "${SHORT_SHA}" latest
