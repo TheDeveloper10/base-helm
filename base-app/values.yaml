@@ -192,6 +192,8 @@ volumeMounts: []
 #   mountPath: "/etc/foo"
 #   readOnly: false
 
+initContainers: []
+
 nodeSelector: {}
 
 tolerations: []
