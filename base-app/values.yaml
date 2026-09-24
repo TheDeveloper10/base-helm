@@ -89,18 +89,23 @@ podAnnotations: {}
 # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
 podLabels: {}
 
+# Defaults to the restricted Pod Security Standard. An image that needs to write
+# to disk should mount an emptyDir rather than relax readOnlyRootFilesystem, and
+# an image with a non-root USER of its own only needs runAsUser overridden here.
 podSecurityContext:
-  {}
-  # fsGroup: 2000
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
 
 securityContext:
-  {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
 
 # Gateway API. Replaces the Ingress support removed in chart 1.2.0.
 # This chart only manages resources belonging to the application itself, so the

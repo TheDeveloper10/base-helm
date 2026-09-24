@@ -5,13 +5,12 @@ metadata:
   labels:
     {{- include "base-app.labels" . | nindent 4 }}
 spec:
-  {{- if .Values.deploymentStrategy }}
+  {{- with .Values.deploymentStrategy }}
   strategy:
-    type: {{ .Values.deploymentStrategy.type }}
-    {{- if .Values.deploymentStrategy.type | quote | eq "RollingUpdate" }}
+    type: {{ .type }}
+    {{- if and (eq .type "RollingUpdate") .rollingUpdate }}
     rollingUpdate:
-      maxSurge: {{ .Values.deploymentStrategy.maxSurge }}
-      maxUnavailable: {{ .Values.deploymentStrategy.maxUnavailable }}
+      {{- toYaml .rollingUpdate | nindent 6 }}
     {{- end }}
   {{- end }}
   {{- if not .Values.autoscaling.enabled }}
@@ -44,16 +43,21 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "base-app.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount }}
+      {{- with .Values.podSecurityContext }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- if .Values.initContainers }}
       initContainers:
         {{- toYaml .Values.initContainers | nindent 8 }}
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}
+          {{- with .Values.securityContext }}
           securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           
