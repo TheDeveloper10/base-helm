@@ -60,3 +60,103 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+parentRefs for the HTTPRoute. The Gateway itself is not managed by this chart,
+so it always has to be named explicitly.
+*/}}
+{{- define "base-app.httpRoute.parentRefs" -}}
+{{- if not .Values.httpRoute.parentRefs -}}
+{{- fail "httpRoute.enabled requires httpRoute.parentRefs, this chart does not create the Gateway" -}}
+{{- end -}}
+{{- toYaml .Values.httpRoute.parentRefs -}}
+{{- end }}
+
+{{/*
+Service port the HTTPRoute sends traffic to. Defaults to the first service port.
+*/}}
+{{- define "base-app.httpRoute.backendPort" -}}
+{{- if .Values.httpRoute.backendPort -}}
+{{- .Values.httpRoute.backendPort -}}
+{{- else -}}
+{{- (index .Values.service.ports 0).servicePort -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+HTTPRoute the policies attach to. Policies are scoped to this application, so
+they always target the route owned by this release.
+*/}}
+{{- define "base-app.policyTargetRoute" -}}
+{{- if not .Values.httpRoute.enabled -}}
+{{- fail "routePolicies require httpRoute.enabled=true, they attach to the HTTPRoute owned by this release" -}}
+{{- end -}}
+{{- include "base-app.fullname" . -}}
+{{- end }}
+
+{{/*
+Rate in the r/s or r/m form expected by the NGINX limit_req directive.
+*/}}
+{{- define "base-app.rateLimit.rate" -}}
+{{- $rl := .Values.routePolicies.rateLimit -}}
+{{- if eq $rl.unit "Second" -}}
+{{ $rl.requests }}r/s
+{{- else if eq $rl.unit "Minute" -}}
+{{ $rl.requests }}r/m
+{{- else -}}
+{{- fail (printf "routePolicies.rateLimit.unit must be Second or Minute, NGINX limit_req supports no other rates, got %q" $rl.unit) -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+NGINX variable the rate limit buckets on.
+*/}}
+{{- define "base-app.rateLimit.key" -}}
+{{- $rl := .Values.routePolicies.rateLimit -}}
+{{- if eq $rl.key "ClientIP" -}}
+$binary_remote_addr
+{{- else if eq $rl.key "Header" -}}
+{{- if not $rl.headerName -}}
+{{- fail "routePolicies.rateLimit.headerName is required when key is Header" -}}
+{{- end -}}
+$http_{{ $rl.headerName | lower | replace "-" "_" }}
+{{- else -}}
+{{- fail (printf "routePolicies.rateLimit.key must be ClientIP or Header, got %q" $rl.key) -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+CORS filter for the HTTPRoute. CORS is part of the core Gateway API rather than
+an NGINX Gateway Fabric CRD, so it rides on the route instead of a policy.
+Empty fields are dropped so the rendered filter only carries what was asked for.
+*/}}
+{{- define "base-app.httpRoute.corsFilter" -}}
+{{- $cors := .Values.routePolicies.cors -}}
+{{- if not $cors.allowOrigins -}}
+{{- fail "routePolicies.cors.enabled=true requires allowOrigins, a CORS filter without an origin rejects every cross-origin request" -}}
+{{- end -}}
+{{- range $origin := $cors.allowOrigins -}}
+{{- if hasSuffix "/" $origin -}}
+{{- fail (printf "routePolicies.cors.allowOrigins entry %q must not end in a slash, an origin is scheme://host[:port]" $origin) -}}
+{{- end -}}
+{{- end -}}
+{{- if and $cors.allowCredentials (has "*" $cors.allowOrigins) -}}
+{{- fail "routePolicies.cors.allowCredentials cannot be combined with the * origin, browsers reject credentialed requests against a wildcard. List the origins explicitly" -}}
+{{- end -}}
+{{- if lt (int $cors.maxAge) 0 -}}
+{{- fail (printf "routePolicies.cors.maxAge must not be negative, got %d" (int $cors.maxAge)) -}}
+{{- end -}}
+{{- $spec := dict -}}
+{{- range $field := list "allowOrigins" "allowMethods" "allowHeaders" "exposeHeaders" -}}
+{{- with index $cors $field -}}
+{{- $_ := set $spec $field . -}}
+{{- end -}}
+{{- end -}}
+{{- if $cors.allowCredentials -}}
+{{- $_ := set $spec "allowCredentials" true -}}
+{{- end -}}
+{{- if gt (int $cors.maxAge) 0 -}}
+{{- $_ := set $spec "maxAge" (int $cors.maxAge) -}}
+{{- end -}}
+{{- dict "type" "CORS" "cors" $spec | toYaml -}}
+{{- end }}

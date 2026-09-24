@@ -33,7 +33,7 @@ service:
   # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
   type: ClusterIP
   # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
-  # First port is main (this is the port linked in the ingress)
+  # First port is main (this is the port the HTTPRoute sends traffic to)
   ports:
     - name: http
       containerPort: 80
@@ -42,24 +42,14 @@ service:
 
 customResources: ""
 # customResources: |
-#   apiVersion: networking.k8s.io/v1
-#   kind: Ingress
+#   apiVersion: gateway.nginx.org/v1alpha1
+#   kind: SnippetsFilter
 #   metadata:
-#     name: minimal-ingress
-#     annotations:
-#       nginx.ingress.kubernetes.io/rewrite-target: /
+#     name: minimal-snippet
 #   spec:
-#     ingressClassName: nginx-example
-#     rules:
-#     - http:
-#         paths:
-#         - path: /testpath
-#           pathType: Prefix
-#           backend:
-#             service:
-#               name: test
-#               port:
-#                 number: 80
+#     snippets:
+#     - context: http.server.location
+#       value: add_header X-Example "example";
 
 # ==== Default Helm Chart
 
@@ -112,23 +102,101 @@ securityContext:
   # runAsNonRoot: true
   # runAsUser: 1000
 
-# This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
-ingress:
+# Gateway API. Replaces the Ingress support removed in chart 1.2.0.
+# This chart only manages resources belonging to the application itself, so the
+# Gateway is expected to already exist and is referenced by httpRoute.parentRefs.
+# The HTTPRoute is plain Gateway API, the routePolicies below render
+# gateway.nginx.org CRDs and need NGINX Gateway Fabric:
+# https://docs.nginx.com/nginx-gateway-fabric/
+
+# This block replaces the old ingress block. More information can be found here: https://gateway-api.sigs.k8s.io/api-types/httproute/
+httpRoute:
   enabled: false
-  className: ""
-  annotations:
-    {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+  annotations: {}
+  # Gateways to attach to. Required, this chart does not create the Gateway.
+  parentRefs: []
+  # - name: gateway
+  #   namespace: nginx-gateway
+  #   sectionName: http
+  hostnames: []
+  # - chart-example.local
+  matches:
+    - path:
+        type: PathPrefix
+        value: /
+  # Extra filters, appended after the CORS filter generated from
+  # routePolicies.cors below.
+  filters: []
+  # - type: RequestHeaderModifier
+  #   requestHeaderModifier:
+  #     set:
+  #       - name: X-Example
+  #         value: example
+  timeouts: {}
+  # request: 30s
+  # backendRequest: 30s
+  # Service port to route to. Defaults to the first entry of service.ports.
+  backendPort: ""
+  # Set to write spec.rules verbatim, ignoring matches/filters/timeouts above.
+  rules: []
+
+# Traffic policies for the HTTPRoute above. CORS is a core Gateway API filter,
+# the rest are NGINX Gateway Fabric CRDs targeting this application's route.
+routePolicies:
+  # CORS is a core Gateway API HTTPRoute filter, so it is rendered onto the
+  # HTTPRoute above rather than into a separate resource.
+  cors:
+    enabled: false
+    # Required when enabled. Each entry is scheme://host[:port], with no
+    # trailing slash. A single * allows any origin, but cannot be combined
+    # with allowCredentials below.
+    allowOrigins: []
+    # - https://www.example.com
+    # - https://*.example.com
+    # Left empty, the Gateway API default of simple methods applies.
+    allowMethods: []
+    # - GET
+    # - POST
+    allowHeaders: []
+    exposeHeaders: []
+    # Lets browsers send cookies and Authorization headers cross-origin.
+    allowCredentials: false
+    # Preflight cache lifetime in seconds. 0 omits the field.
+    maxAge: 0
+
+  # https://docs.nginx.com/nginx-gateway-fabric/traffic-management/rate-limit/
+  rateLimit:
+    enabled: false
+    annotations: {}
+    requests: 100
+    # Second or Minute. NGINX limit_req accepts no other rates.
+    unit: Second
+    # Requests allowed to exceed the rate before traffic is rejected with a 429.
+    # Bursting requests are passed through immediately rather than queued.
+    burst: 0
+    # What the limit is counted per. ClientIP buckets on the client address,
+    # Header on the value of headerName below.
+    key: ClientIP
+    headerName: ""
+    # X-API-Key
+
+  # Max request body size and other client connection settings.
+  # https://docs.nginx.com/nginx-gateway-fabric/traffic-management/client-settings/
+  clientSettings:
+    enabled: false
+    annotations: {}
+    body:
+      # Max request body size in NGINX size form. A bare number is bytes,
+      # otherwise use a k/m/g suffix. 0 disables the limit entirely.
+      maxSize: ""
+      bufferSize: ""
+      timeout: ""
+    keepAlive: {}
+    # requests: 100
+    # time: 1h
+    # timeout:
+    #   server: 75s
+    #   header: 60s
 
 resources:
   {}

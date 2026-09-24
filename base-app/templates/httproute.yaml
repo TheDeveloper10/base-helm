@@ -1,0 +1,43 @@
+{{- if .Values.httpRoute.enabled }}
+{{- $filters := .Values.httpRoute.filters }}
+{{- if .Values.routePolicies.cors.enabled }}
+{{- $filters = prepend $filters (include "base-app.httpRoute.corsFilter" . | fromYaml) }}
+{{- end }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "base-app.fullname" . }}
+  labels:
+    {{- include "base-app.labels" . | nindent 4 }}
+  {{- with .Values.httpRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- include "base-app.httpRoute.parentRefs" . | nindent 4 }}
+  {{- with .Values.httpRoute.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- if .Values.httpRoute.rules }}
+    {{- toYaml .Values.httpRoute.rules | nindent 4 }}
+    {{- else }}
+    - backendRefs:
+        - name: {{ include "base-app.fullname" . }}
+          port: {{ include "base-app.httpRoute.backendPort" . }}
+      {{- with .Values.httpRoute.matches }}
+      matches:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $filters }}
+      filters:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.httpRoute.timeouts }}
+      timeouts:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- end }}
+{{- end }}

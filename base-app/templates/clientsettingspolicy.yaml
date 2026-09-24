@@ -1,0 +1,30 @@
+{{- $cs := .Values.routePolicies.clientSettings }}
+{{- if $cs.enabled }}
+apiVersion: gateway.nginx.org/v1alpha1
+kind: ClientSettingsPolicy
+metadata:
+  name: {{ include "base-app.fullname" . }}
+  labels:
+    {{- include "base-app.labels" . | nindent 4 }}
+  {{- with $cs.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: {{ include "base-app.policyTargetRoute" . }}
+  {{- $body := dict }}
+  {{- with $cs.body.maxSize }}{{ $_ := set $body "maxSize" (. | toString) }}{{ end }}
+  {{- with $cs.body.bufferSize }}{{ $_ := set $body "bufferSize" (. | toString) }}{{ end }}
+  {{- with $cs.body.timeout }}{{ $_ := set $body "timeout" (. | toString) }}{{ end }}
+  {{- with $body }}
+  body:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with $cs.keepAlive }}
+  keepAlive:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

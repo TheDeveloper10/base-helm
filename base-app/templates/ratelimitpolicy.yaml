@@ -1,0 +1,29 @@
+{{- $rl := .Values.routePolicies.rateLimit }}
+{{- if $rl.enabled }}
+apiVersion: gateway.nginx.org/v1alpha1
+kind: RateLimitPolicy
+metadata:
+  name: {{ include "base-app.fullname" . }}
+  labels:
+    {{- include "base-app.labels" . | nindent 4 }}
+  {{- with $rl.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: {{ include "base-app.policyTargetRoute" . }}
+  rateLimit:
+    local:
+      rules:
+        - key: {{ include "base-app.rateLimit.key" . | quote }}
+          rate: {{ include "base-app.rateLimit.rate" . }}
+          zoneSize: 10m
+          {{- if gt (int $rl.burst) 0 }}
+          burst: {{ int $rl.burst }}
+          noDelay: true
+          {{- end }}
+    rejectCode: 429
+{{- end }}
