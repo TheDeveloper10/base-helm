@@ -63,8 +63,9 @@ Create the name of the service account to use
 
 {{/*
 parentRefs for the HTTPRoute. The Gateway itself is not managed by this chart.
-Explicit httpRoute.parentRefs win, otherwise one ref per hostname is generated
-against httpRoute.gateway, attaching to the listener named https-<hostname>.
+Explicit httpRoute.parentRefs win. Otherwise one ref per hostname is generated,
+pointing at the listener https-<hostname> of this release's ListenerSet, or of
+httpRoute.gateway directly when httpRoute.listenerSet is disabled.
 */}}
 {{- define "base-app.httpRoute.parentRefs" -}}
 {{- if .Values.httpRoute.parentRefs -}}
@@ -76,13 +77,32 @@ against httpRoute.gateway, attaching to the listener named https-<hostname>.
 {{- $gw := .Values.httpRoute.gateway -}}
 {{- $refs := list -}}
 {{- range $host := .Values.httpRoute.hostnames -}}
-{{- if contains "*" $host -}}
-{{- fail (printf "httpRoute.hostnames entry %q is a wildcard, no default listener name can be derived from it. Set httpRoute.parentRefs explicitly" $host) -}}
+{{- $section := include "base-app.listenerName" $host -}}
+{{- if and $.Values.httpRoute.enabled $.Values.httpRoute.listenerSet.enabled -}}
+{{- $refs = append $refs (dict "group" "gateway.networking.k8s.io" "kind" "ListenerSet" "name" (include "base-app.fullname" $) "sectionName" $section) -}}
+{{- else -}}
+{{- $refs = append $refs (dict "name" $gw.name "namespace" $gw.namespace "sectionName" $section) -}}
 {{- end -}}
-{{- $refs = append $refs (dict "name" $gw.name "namespace" $gw.namespace "sectionName" (printf "https-%s" $host)) -}}
 {{- end -}}
 {{- toYaml $refs -}}
 {{- end -}}
+{{- end }}
+
+{{/*
+Listener name for a hostname, https-<hostname>. Takes the hostname as context.
+*/}}
+{{- define "base-app.listenerName" -}}
+{{- if contains "*" . -}}
+{{- fail (printf "httpRoute.hostnames entry %q is a wildcard, no listener name can be derived from it. Set httpRoute.parentRefs explicitly and disable httpRoute.listenerSet" .) -}}
+{{- end -}}
+https-{{ . }}
+{{- end }}
+
+{{/*
+Name of the TLS secret holding the certificate for the hostnames.
+*/}}
+{{- define "base-app.tls.secretName" -}}
+{{- .Values.tls.certificate.secretName | default (printf "%s-tls" (include "base-app.fullname" .)) -}}
 {{- end }}
 
 {{/*
@@ -93,7 +113,7 @@ namespace. Rendered as a YAML list, used for the TLS secret ReferenceGrant.
 {{- $namespaces := list -}}
 {{- range $ref := include "base-app.httpRoute.parentRefs" . | fromYamlArray -}}
 {{- $ns := default $.Release.Namespace $ref.namespace -}}
-{{- if ne $ns $.Release.Namespace -}}
+{{- if and (eq (default "Gateway" $ref.kind) "Gateway") (ne $ns $.Release.Namespace) -}}
 {{- $namespaces = append $namespaces $ns -}}
 {{- end -}}
 {{- end -}}

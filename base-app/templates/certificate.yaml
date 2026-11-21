@@ -7,7 +7,7 @@
 {{- if not $dnsNames }}
 {{- fail "tls.certificate needs dnsNames, set tls.certificate.dnsNames or httpRoute.hostnames" }}
 {{- end }}
-{{- $secretName := $cert.secretName | default (printf "%s-tls" (include "base-app.fullname" .)) }}
+{{- $secretName := include "base-app.tls.secretName" . }}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -32,7 +32,11 @@ spec:
   {{- with $cert.renewBefore }}
   renewBefore: {{ . }}
   {{- end }}
-{{- $namespaces := include "base-app.gatewayNamespaces" . | fromYamlArray }}
+{{- /* With a ListenerSet the secret is read from this namespace, no grant needed. */}}
+{{- $namespaces := list }}
+{{- if not (and .Values.httpRoute.enabled .Values.httpRoute.listenerSet.enabled) }}
+{{- $namespaces = include "base-app.gatewayNamespaces" . | fromYamlArray }}
+{{- end }}
 {{- with $namespaces }}
 ---
 # Lets the Gateway read the certificate secret from this namespace.

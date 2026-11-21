@@ -151,13 +151,24 @@ resources:
 httpRoute:
   enabled: false
   annotations: {}
-  # Gateway used for the default parentRefs below.
+  # Gateway the ListenerSet (or the default parentRefs) attach to.
   gateway:
     name: main
     namespace: gateway
-  # Gateways to attach to. Left empty, one ref per hostname is generated:
+  # ListenerSet with one HTTPS listener per hostname (named https-<hostname>),
+  # terminating TLS with the secret from tls.certificate. The secret stays in
+  # the release namespace, so no ReferenceGrant is needed. The Gateway must
+  # allow it via spec.allowedListeners.
+  # https://gateway-api.sigs.k8s.io/geps/gep-1713/
+  listenerSet:
+    enabled: true
+    annotations: {}
+    port: 443
+  # Left empty, one ref per hostname is generated. With listenerSet enabled:
+  # {group: gateway.networking.k8s.io, kind: ListenerSet, name: <fullname>, sectionName: https-<hostname>}
+  # otherwise:
   # {name: <gateway.name>, namespace: <gateway.namespace>, sectionName: https-<hostname>}
-  # Wildcard hostnames need explicit parentRefs.
+  # Wildcard hostnames need explicit parentRefs and listenerSet disabled.
   parentRefs: []
   # - name: main
   #   namespace: gateway
@@ -278,8 +289,9 @@ routePolicies:
     #   header: 60s
 
 # cert-manager Certificate for the HTTPRoute hostnames. The secret lives in the
-# release namespace, a ReferenceGrant lets the Gateway namespaces from the
-# parentRefs read it. Point the Gateway listener's certificateRefs at it.
+# release namespace and is used by httpRoute.listenerSet. Without a ListenerSet
+# a ReferenceGrant is rendered instead, letting the Gateway namespaces from the
+# parentRefs read it; point the Gateway listener's certificateRefs at it.
 tls:
   certificate:
     enabled: false

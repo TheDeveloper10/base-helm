@@ -1,0 +1,42 @@
+{{- $ls := .Values.httpRoute.listenerSet }}
+{{- if and .Values.httpRoute.enabled $ls.enabled }}
+{{- if not .Values.httpRoute.hostnames }}
+{{- fail "httpRoute.listenerSet needs httpRoute.hostnames, one listener is created per hostname" }}
+{{- end }}
+{{- $secretName := include "base-app.tls.secretName" . }}
+# Listeners for this application's hostnames, merged into the shared Gateway.
+# The certificate secret lives in this namespace, so no ReferenceGrant is needed.
+# The Gateway has to allow it via spec.allowedListeners.
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: {{ include "base-app.fullname" . }}
+  labels:
+    {{- include "base-app.labels" . | nindent 4 }}
+  {{- with $ls.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: {{ .Values.httpRoute.gateway.name }}
+    namespace: {{ .Values.httpRoute.gateway.namespace }}
+  listeners:
+    {{- range $host := .Values.httpRoute.hostnames }}
+    - name: {{ include "base-app.listenerName" $host }}
+      hostname: {{ $host | quote }}
+      protocol: HTTPS
+      port: {{ int $ls.port }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - group: ""
+            kind: Secret
+            name: {{ $secretName }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
+{{- end }}
