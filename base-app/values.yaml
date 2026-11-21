@@ -265,6 +265,12 @@ routePolicies:
     port: 80
     # Path the authorization request is sent to. Empty uses the root path.
     path: ""
+    # Client request headers sent to the auth service. Envoy's HTTP ext auth
+    # only sends Host, Method, Path, Content-Length and Authorization by default,
+    # so cookies etc. must be listed here.
+    headersToExtAuth: []
+    # - cookie
+    # - x-forwarded-for
     # Headers from the auth response forwarded to the backend.
     headers: []
     # - x-user-id

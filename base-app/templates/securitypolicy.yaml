@@ -37,6 +37,10 @@ spec:
   {{- fail "routePolicies.extAuth.enabled=true requires service" }}
   {{- end }}
   extAuth:
+    {{- with $ea.headersToExtAuth }}
+    headersToExtAuth:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
     http:
       backendRefs:
         - name: {{ $ea.service }}
