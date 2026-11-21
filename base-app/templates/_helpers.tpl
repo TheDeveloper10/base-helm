@@ -62,14 +62,79 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
-parentRefs for the HTTPRoute. The Gateway itself is not managed by this chart,
-so it always has to be named explicitly.
+parentRefs for the HTTPRoute. The Gateway itself is not managed by this chart.
+Explicit httpRoute.parentRefs win, otherwise one ref per hostname is generated
+against httpRoute.gateway, attaching to the listener named https-<hostname>.
 */}}
 {{- define "base-app.httpRoute.parentRefs" -}}
-{{- if not .Values.httpRoute.parentRefs -}}
-{{- fail "httpRoute.enabled requires httpRoute.parentRefs, this chart does not create the Gateway" -}}
-{{- end -}}
+{{- if .Values.httpRoute.parentRefs -}}
 {{- toYaml .Values.httpRoute.parentRefs -}}
+{{- else -}}
+{{- if not .Values.httpRoute.hostnames -}}
+{{- fail "httpRoute needs either parentRefs or hostnames, default parentRefs are derived from the hostnames (sectionName https-<hostname>)" -}}
+{{- end -}}
+{{- $gw := .Values.httpRoute.gateway -}}
+{{- $refs := list -}}
+{{- range $host := .Values.httpRoute.hostnames -}}
+{{- if contains "*" $host -}}
+{{- fail (printf "httpRoute.hostnames entry %q is a wildcard, no default listener name can be derived from it. Set httpRoute.parentRefs explicitly" $host) -}}
+{{- end -}}
+{{- $refs = append $refs (dict "name" $gw.name "namespace" $gw.namespace "sectionName" (printf "https-%s" $host)) -}}
+{{- end -}}
+{{- toYaml $refs -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Gateway namespaces the effective parentRefs point to, excluding the release
+namespace. Rendered as a YAML list, used for the TLS secret ReferenceGrant.
+*/}}
+{{- define "base-app.gatewayNamespaces" -}}
+{{- $namespaces := list -}}
+{{- range $ref := include "base-app.httpRoute.parentRefs" . | fromYamlArray -}}
+{{- $ns := default $.Release.Namespace $ref.namespace -}}
+{{- if ne $ns $.Release.Namespace -}}
+{{- $namespaces = append $namespaces $ns -}}
+{{- end -}}
+{{- end -}}
+{{- $namespaces | uniq | toYaml -}}
+{{- end }}
+
+{{/*
+Gateway implementation the routePolicies are rendered for.
+*/}}
+{{- define "base-app.routePolicies.provider" -}}
+{{- $p := .Values.routePolicies.provider | default "envoy" -}}
+{{- if not (has $p (list "envoy" "nginx")) -}}
+{{- fail (printf "routePolicies.provider must be envoy or nginx, got %q" $p) -}}
+{{- end -}}
+{{- $p -}}
+{{- end }}
+
+{{/*
+Envoy Gateway local rate limit rules. ClientIP and Header use Distinct
+selectors, so every client IP / header value gets its own bucket.
+*/}}
+{{- define "base-app.rateLimit.envoyRules" -}}
+{{- $rl := .Values.routePolicies.rateLimit -}}
+{{- if not (has $rl.unit (list "Second" "Minute" "Hour" "Day" "Month" "Year")) -}}
+{{- fail (printf "routePolicies.rateLimit.unit must be one of Second, Minute, Hour, Day, Month, Year for Envoy, got %q" $rl.unit) -}}
+{{- end -}}
+{{- $limit := dict "requests" (int $rl.requests) "unit" $rl.unit -}}
+{{- $rules := list -}}
+{{- if eq $rl.key "ClientIP" -}}
+{{- range $cidr := list "0.0.0.0/0" "::/0" -}}
+{{- $rules = append $rules (dict "clientSelectors" (list (dict "sourceCIDR" (dict "type" "Distinct" "value" $cidr))) "limit" $limit) -}}
+{{- end -}}
+{{- else if eq $rl.key "Header" -}}
+{{- if not $rl.headerName -}}
+{{- fail "routePolicies.rateLimit.headerName is required when key is Header" -}}
+{{- end -}}
+{{- $rules = append $rules (dict "clientSelectors" (list (dict "headers" (list (dict "name" $rl.headerName "type" "Distinct")))) "limit" $limit) -}}
+{{- else -}}
+{{- fail (printf "routePolicies.rateLimit.key must be ClientIP or Header, got %q" $rl.key) -}}
+{{- end -}}
+{{- toYaml $rules -}}
 {{- end }}
 
 {{/*

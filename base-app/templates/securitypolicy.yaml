@@ -1,0 +1,53 @@
+{{- $ip := .Values.routePolicies.ipAllowList }}
+{{- $ea := .Values.routePolicies.extAuth }}
+{{- if or $ip.enabled $ea.enabled }}
+{{- if ne (include "base-app.routePolicies.provider" .) "envoy" }}
+{{- fail "routePolicies.ipAllowList and routePolicies.extAuth require routePolicies.provider=envoy" }}
+{{- end }}
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: {{ include "base-app.fullname" . }}
+  labels:
+    {{- include "base-app.labels" . | nindent 4 }}
+  {{- with .Values.routePolicies.securityPolicyAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: {{ include "base-app.policyTargetRoute" . }}
+  {{- if $ip.enabled }}
+  {{- if not $ip.cidrs }}
+  {{- fail "routePolicies.ipAllowList.enabled=true requires cidrs, an empty allow list denies every request" }}
+  {{- end }}
+  authorization:
+    defaultAction: Deny
+    rules:
+      - name: ip-allow-list
+        action: Allow
+        principal:
+          clientCIDRs:
+            {{- toYaml $ip.cidrs | nindent 12 }}
+  {{- end }}
+  {{- if $ea.enabled }}
+  {{- if not $ea.service }}
+  {{- fail "routePolicies.extAuth.enabled=true requires service" }}
+  {{- end }}
+  extAuth:
+    http:
+      backendRefs:
+        - name: {{ $ea.service }}
+          namespace: {{ default .Release.Namespace $ea.namespace }}
+          port: {{ int $ea.port }}
+      {{- with $ea.path }}
+      path: {{ . | quote }}
+      {{- end }}
+      {{- with $ea.headers }}
+      headersToBackend:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- end }}
+{{- end }}

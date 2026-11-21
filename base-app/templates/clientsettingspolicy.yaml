@@ -1,5 +1,6 @@
 {{- $cs := .Values.routePolicies.clientSettings }}
-{{- if $cs.enabled }}
+{{- /* NGINX only. Envoy has no route-level equivalent, body size is set on the Gateway. */}}
+{{- if and $cs.enabled (eq (include "base-app.routePolicies.provider" .) "nginx") }}
 apiVersion: gateway.nginx.org/v1alpha1
 kind: ClientSettingsPolicy
 metadata:

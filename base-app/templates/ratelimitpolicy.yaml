@@ -1,5 +1,26 @@
 {{- $rl := .Values.routePolicies.rateLimit }}
 {{- if $rl.enabled }}
+{{- if eq (include "base-app.routePolicies.provider" .) "envoy" }}
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: {{ include "base-app.fullname" . }}
+  labels:
+    {{- include "base-app.labels" . | nindent 4 }}
+  {{- with $rl.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: {{ include "base-app.policyTargetRoute" . }}
+  rateLimit:
+    local:
+      rules:
+        {{- include "base-app.rateLimit.envoyRules" . | nindent 8 }}
+{{- else }}
 apiVersion: gateway.nginx.org/v1alpha1
 kind: RateLimitPolicy
 metadata:
@@ -26,4 +47,5 @@ spec:
           noDelay: true
           {{- end }}
     rejectCode: 429
+{{- end }}
 {{- end }}

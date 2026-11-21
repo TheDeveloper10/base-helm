@@ -143,18 +143,25 @@ resources:
 # This chart only manages resources belonging to the application itself, so the
 # Gateway is expected to already exist and is referenced by httpRoute.parentRefs.
 # The HTTPRoute is plain Gateway API, the routePolicies below render
-# gateway.nginx.org CRDs and need NGINX Gateway Fabric:
-# https://docs.nginx.com/nginx-gateway-fabric/
+# implementation specific CRDs selected by routePolicies.provider:
+# envoy: https://gateway.envoyproxy.io/
+# nginx: https://docs.nginx.com/nginx-gateway-fabric/
 
 # This block replaces the old ingress block. More information can be found here: https://gateway-api.sigs.k8s.io/api-types/httproute/
 httpRoute:
   enabled: false
   annotations: {}
-  # Gateways to attach to. Required, this chart does not create the Gateway.
+  # Gateway used for the default parentRefs below.
+  gateway:
+    name: main
+    namespace: gateway
+  # Gateways to attach to. Left empty, one ref per hostname is generated:
+  # {name: <gateway.name>, namespace: <gateway.namespace>, sectionName: https-<hostname>}
+  # Wildcard hostnames need explicit parentRefs.
   parentRefs: []
-  # - name: gateway
-  #   namespace: nginx-gateway
-  #   sectionName: http
+  # - name: main
+  #   namespace: gateway
+  #   sectionName: https-chart-example.local
   hostnames: []
   # - chart-example.local
   matches:
@@ -178,8 +185,12 @@ httpRoute:
   rules: []
 
 # Traffic policies for the HTTPRoute above. CORS is a core Gateway API filter,
-# the rest are NGINX Gateway Fabric CRDs targeting this application's route.
+# the rest are gateway specific CRDs targeting this application's route.
 routePolicies:
+  # envoy: Envoy Gateway BackendTrafficPolicy / SecurityPolicy
+  # nginx: NGINX Gateway Fabric RateLimitPolicy / ClientSettingsPolicy
+  provider: envoy
+
   # CORS is a core Gateway API HTTPRoute filter, so it is rendered onto the
   # HTTPRoute above rather than into a separate resource.
   cors:
@@ -201,23 +212,54 @@ routePolicies:
     # Preflight cache lifetime in seconds. 0 omits the field.
     maxAge: 0
 
-  # https://docs.nginx.com/nginx-gateway-fabric/traffic-management/rate-limit/
+  # envoy: BackendTrafficPolicy rateLimit.local, limits apply per Envoy replica.
+  #   https://gateway.envoyproxy.io/docs/tasks/traffic/local-rate-limit/
+  # nginx: RateLimitPolicy
+  #   https://docs.nginx.com/nginx-gateway-fabric/traffic-management/rate-limit/
   rateLimit:
     enabled: false
     annotations: {}
     requests: 100
-    # Second or Minute. NGINX limit_req accepts no other rates.
+    # nginx: Second or Minute. envoy: Second, Minute, Hour, Day, Month or Year.
     unit: Second
-    # Requests allowed to exceed the rate before traffic is rejected with a 429.
-    # Bursting requests are passed through immediately rather than queued.
+    # nginx only. Requests allowed to exceed the rate before traffic is rejected
+    # with a 429, passed through immediately rather than queued. Ignored by envoy.
     burst: 0
     # What the limit is counted per. ClientIP buckets on the client address,
-    # Header on the value of headerName below.
+    # Header on the value of headerName below. With envoy behind a load
+    # balancer, the Gateway needs clientIPDetection for ClientIP to be useful.
     key: ClientIP
     headerName: ""
     # X-API-Key
 
-  # Max request body size and other client connection settings.
+  # envoy only, rendered together with extAuth into one SecurityPolicy.
+  securityPolicyAnnotations: {}
+
+  # envoy only. Denies every request whose client address is not in cidrs.
+  # https://gateway.envoyproxy.io/docs/tasks/security/restrict-ip-access/
+  ipAllowList:
+    enabled: false
+    cidrs: []
+    # - 10.0.0.0/8
+
+  # envoy only. HTTP external authorization.
+  # https://gateway.envoyproxy.io/docs/tasks/security/ext-auth/
+  # A service in another namespace needs a ReferenceGrant there allowing
+  # SecurityPolicy from this namespace, this chart does not create it.
+  extAuth:
+    enabled: false
+    service: ""
+    # Defaults to the release namespace.
+    namespace: ""
+    port: 80
+    # Path the authorization request is sent to. Empty uses the root path.
+    path: ""
+    # Headers from the auth response forwarded to the backend.
+    headers: []
+    # - x-user-id
+
+  # nginx only. Max request body size and other client connection settings.
+  # Ignored with provider envoy, body size is configured on the Gateway there.
   # https://docs.nginx.com/nginx-gateway-fabric/traffic-management/client-settings/
   clientSettings:
     enabled: false
@@ -234,6 +276,24 @@ routePolicies:
     # timeout:
     #   server: 75s
     #   header: 60s
+
+# cert-manager Certificate for the HTTPRoute hostnames. The secret lives in the
+# release namespace, a ReferenceGrant lets the Gateway namespaces from the
+# parentRefs read it. Point the Gateway listener's certificateRefs at it.
+tls:
+  certificate:
+    enabled: false
+    annotations: {}
+    # Defaults to <fullname>-tls.
+    secretName: ""
+    # Defaults to httpRoute.hostnames.
+    dnsNames: []
+    issuerRef:
+      name: ""
+      kind: ClusterIssuer
+      group: cert-manager.io
+    duration: ""
+    renewBefore: ""
 
 resources:
   {}

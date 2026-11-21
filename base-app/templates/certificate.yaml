@@ -1,0 +1,57 @@
+{{- $cert := .Values.tls.certificate }}
+{{- if $cert.enabled }}
+{{- if not $cert.issuerRef.name }}
+{{- fail "tls.certificate.enabled=true requires tls.certificate.issuerRef.name" }}
+{{- end }}
+{{- $dnsNames := $cert.dnsNames | default .Values.httpRoute.hostnames }}
+{{- if not $dnsNames }}
+{{- fail "tls.certificate needs dnsNames, set tls.certificate.dnsNames or httpRoute.hostnames" }}
+{{- end }}
+{{- $secretName := $cert.secretName | default (printf "%s-tls" (include "base-app.fullname" .)) }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "base-app.fullname" . }}
+  labels:
+    {{- include "base-app.labels" . | nindent 4 }}
+  {{- with $cert.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  secretName: {{ $secretName }}
+  dnsNames:
+    {{- toYaml $dnsNames | nindent 4 }}
+  issuerRef:
+    name: {{ $cert.issuerRef.name }}
+    kind: {{ $cert.issuerRef.kind | default "ClusterIssuer" }}
+    group: {{ $cert.issuerRef.group | default "cert-manager.io" }}
+  {{- with $cert.duration }}
+  duration: {{ . }}
+  {{- end }}
+  {{- with $cert.renewBefore }}
+  renewBefore: {{ . }}
+  {{- end }}
+{{- $namespaces := include "base-app.gatewayNamespaces" . | fromYamlArray }}
+{{- with $namespaces }}
+---
+# Lets the Gateway read the certificate secret from this namespace.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: {{ include "base-app.fullname" $ }}-tls
+  labels:
+    {{- include "base-app.labels" $ | nindent 4 }}
+spec:
+  from:
+    {{- range . }}
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      namespace: {{ . }}
+    {{- end }}
+  to:
+    - group: ""
+      kind: Secret
+      name: {{ $secretName }}
+{{- end }}
+{{- end }}
